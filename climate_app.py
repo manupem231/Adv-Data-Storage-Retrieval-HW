@@ -1,10 +1,14 @@
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
+from sqlalchemy import func
 
 from flask import Flask, jsonify
 import numpy as np
 import pandas as pd
+import time
+from datetime import datetime, timedelta, date
+from dateutil.parser import parse
 
 # Database Setup
 engine = create_engine("sqlite:///hawaii.sqlite")
@@ -34,8 +38,8 @@ def welcome():
             /api/v1.0/precipitation<br/> \
             /api/v1.0/stations<br/> \
             /api/v1.0/tobs<br/> \
-            /api/v1.0/start<br/> \
-            /api/v1.0/start/end")
+            /api/v1.0/&ltstart&gt<br/> \
+            /api/v1.0/&ltstart&gt/&ltend&gt")
 
 @app.route("/api/v1.0/precipitation")
 def dates():
@@ -58,55 +62,67 @@ def dates():
 
 @app.route("/api/v1.0/stations")
 def stations():
-    station_results = session.query(Measurement.station).\
+    station_results = session.query(Measurement.station, Measurement.date).\
                       filter(Measurement.date.between('2017-01-01', '2017-12-31')).all()
                       
     all_stations = []
     for station in station_results:
         station_dict = {}
-        station_dict["station"]=station.station
+        station_dict["Station"] = station.station
+        station_dict["Date"] = station.date
         all_stations.append(station_dict)
 
     return jsonify(all_stations)
 
 @app.route("/api/v1.0/tobs")
 def tobs():
-    tobs_results = session.query(Measurement.tobs).\
+    tobs_results = session.query(Measurement.tobs, Measurement.station, Measurement.date).\
                     filter(Measurement.date.between('2017-01-01', '2017-12-31')).all()
                       
     all_tobs = []
     for tob in tobs_results:
         tob_dict = {}
-        tob_dict["Temp. Observations"]= tob.tobs
+        tob_dict["Temp. Observations"] = tob.tobs
+        tob_dict["Station"] = tob.station
+        tob_dict["Date"] = tob.date
         all_tobs.append(tob_dict)
 
     return jsonify(all_tobs)
 
-#@app.route("/api/v1.0/<start>")
-@app.route("/api/v1.0/start")
 
-def temp_details(start = '2017-01-01'):
-    """Return temperature details for a given start date."""
+@app.route("/api/v1.0/<start>")
+def temp_start_details(start = '2017-01-01'):
 
-    # Temperature details for a given start date
-    temperature_details = session.query(Measurement.tobs).\
-                        filter(Measurement.date == start).all()
-    temperature_details_df = pd.DataFrame(temperature_details, columns=['Observations_Count'])
-    tobs = temperature_details_df['Observations_Count']
+    """Return Min/Max/Avg temperature details for a given start date."""
     
-    min_temp = min(tobs)
-    max_temp = max(tobs)
-    avg_temp = np.mean(tobs)
+    temperature_min = session.query(func.min(Measurement.tobs)).\
+                        filter(Measurement.date >= '2017-01-01').scalar()
 
-    temp_details = []
+    temperature_max = session.query(func.max(Measurement.tobs)).\
+                        filter(Measurement.date >= '2017-01-01').scalar()
+
+    temperature_avg = session.query(func.avg(Measurement.tobs)).\
+                        filter(Measurement.date >= '2017-01-01').scalar()
+
     
-    temp_start__dict = {}
-    temp_start__dict['Min Temperature'] = float(min_temp)
-    temp_start__dict['Max Temperature'] = float(max_temp)
-    temp_start__dict['Avg Temperature'] = float(avg_temp)
-    temp_details.append(temp_start__dict)
+    return f"TMIN: {temperature_min} \nTMAX: {temperature_max} \nTAVG: {temperature_avg}"
 
-    return jsonify(temp_details)
+@app.route("/api/v1.0/<start>/<end>")
+def temp_start_end_details(start = '2017-01-01', end = '2017-12-31'):
+
+    """Return Min/Max/Avg temperature details for a given start & end date."""
+    
+    temp_min = session.query(func.min(Measurement.tobs)).\
+                        filter(Measurement.date.between('2017-01-01', '2017-12-31')).scalar()
+
+    temp_max = session.query(func.max(Measurement.tobs)).\
+                        filter(Measurement.date.between('2017-01-01', '2017-12-31')).scalar()
+
+    temp_avg = session.query(func.avg(Measurement.tobs)).\
+                        filter(Measurement.date.between('2017-01-01', '2017-12-31')).scalar()
+
+    
+    return f"TMIN: {temp_min} \nTMAX: {temp_max} \nTAVG: {temp_avg}"
 
 if __name__ == '__main__':
     app.run(debug = True)
